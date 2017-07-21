@@ -1,0 +1,245 @@
+
+<!-- Latest compiled and minified CSS -->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+
+<!-- Optional theme -->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp" crossorigin="anonymous">
+
+<script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+
+<!-- Latest compiled and minified JavaScript -->
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+
+<script src="https://code.highcharts.com/stock/highstock.js"></script>
+<script src="https://code.highcharts.com/stock/highcharts-more.js"></script>
+<script src="https://code.highcharts.com/stock/modules/exporting.js"></script>
+
+
+<script src="https://code.highcharts.com/maps/modules/map.js"></script>
+<script src="https://code.highcharts.com/maps/modules/data.js"></script>
+
+
+<div id="container" style="min-width: 400px; height: 500px; margin: 0 auto"></div>
+
+
+<script>
+
+    $.get('data_time-series.csv', function (dataCsv) {
+        // the header has to have a "holder" item, since somehow the last header item cannot be parsed correctly
+
+        var data = {};
+
+        var lines = dataCsv.split('\n');
+
+        var keys =lines[0].split(',');
+
+
+        $.each(keys, function(keyNo, key) {
+            data[key] = [];
+        });
+
+
+        $.each(lines, function(lineNo, line) {
+            var items = line.split(',');
+
+             if(lineNo!=0) {
+
+                $.each(keys, function(keyNo, key) {
+                    data[key].push(parseFloat(items[keyNo]));
+                });
+            }
+        });
+
+
+        var xName = 'timestamp', yPredictedName = 'mean', yStdName = 'std', yMeasuredName = 'chilledWater-TonDays';
+        var data1 = [], data2 = [], data3 = [];
+
+        $.each(data[xName], function(i, d) {
+            var yPredicted = data[yPredictedName][i], yStd = data[yStdName][i];
+            var yMeasured = data[yMeasuredName][i];
+            data1.push([d, yPredicted - 2 * yStd, yPredicted + 2 * yStd ]);
+            data2.push([d, yPredicted]);
+
+            var measuredItem = {
+
+                marker: {
+                    fillColor: data['abnormal'][i]? 'red':'#0b62a4'
+                },
+                x: d,
+                y: yMeasured
+            };
+            data3.push(measuredItem);
+
+        });
+
+        function isNumber(obj) {
+            return obj!== undefined && typeof(obj) === 'number' && !isNaN(obj);
+        }
+
+        function getMinorMax (a, type) {
+
+            if (!a.length > 1) return a;
+
+            var value;
+            if(type == 'min')
+                value = Math.min.apply(null, a.filter(isNumber));
+             else
+                value = Math.max.apply(null, a.filter(isNumber));
+
+             return value;
+        }
+
+        var chart = new Highcharts.stockChart('container', {
+
+            plotOptions: {
+            },
+
+            credits: { enabled: false },
+
+            rangeSelector: {
+                selected: 2
+            },
+
+            title: {
+                text: 'Measured vs. Predicted'
+            },
+
+            tooltip: {
+                valueSuffix: '°C'
+            },
+
+            legend: {
+                enabled: true,
+                verticalAlign: 'top',
+                floating: true,
+                y: 25
+            },
+
+
+            series: [
+
+                {
+                    type: 'areasplinerange',
+                    turboThreshold: 3000,
+                    name: 'confidence range',
+                    data: data1,
+                    lineWidth: 0,
+                    fillOpacity: 0.4,
+                    showInNavigator: false,
+                    showInLegend: false,
+                    color: '#6b9bc3',
+                    fillColor: {
+                        linearGradient: {
+                            x1: 0,
+                            y1: 0,
+                            x2: 0,
+                            y2: 1
+                        },
+                        stops: [
+                            [0, Highcharts.getOptions().colors[0]],
+                            [1, Highcharts.Color(Highcharts.getOptions().colors[0]).setOpacity(0).get('rgba')]
+                        ]
+                    }
+                },
+
+                // only for legend
+                {
+                    type: 'scatter',
+                    name: 'confidence range',
+                    data: {},
+                    lineWidth: 0,
+                    showInNavigator: false,
+                    showInLegend: true,
+                    color: '#6b9bc3',
+                    marker: {
+                        fillColor: Highcharts.Color(Highcharts.getOptions().colors[0]).setOpacity(0.5).get('rgba'),
+                        symbol: 'square',
+                        radius: 15
+                    }
+                },
+
+
+                {
+                    type: 'spline',
+                    turboThreshold: 3000,
+                    lineWidth: 1,
+                    name: 'predicted mean',
+                    data: data2,
+                    color: '#0b62a4',
+                    showInNavigator: false,
+                    showInLegend: false,
+                    marker: {    // somehow no markers, need to add addtional scatter series
+                    }
+                },
+
+
+                {
+                    type: 'scatter',
+                    turboThreshold: 3000,
+                    lineWidth: 0,
+                    name: 'predicted',
+                    data: data2,
+                    color: '#0b62a4',
+                    showInNavigator: true,
+                    allowPointSelect: true,
+                    marker: {
+                        symbol: "circle",
+                        radius: 3,
+                        lineColor: '#0b62a4',
+                        lineWidth: 1,
+                        fillColor: 'white',
+                        enable: false,
+                        states: {
+                            select: {
+                                radius: 9,
+                                fillColor: this.color,
+                                lineColor: 'black',
+                                lineWidth: 3
+                            }
+                        },
+                    },
+                    tooltip: {
+                        headerFormat: '',
+                        pointFormatter: function () {
+                            return '<span style="font-size: 10px">' + Highcharts.dateFormat("%A, %b, %e, %Y", this.x)
+                                + '</span><br/>' + this.series.name + ': <b>' + this.y.toFixed(2) + '</b>';
+                        }
+                    }
+                },
+                {
+                    type: 'scatter',
+                    turboThreshold: 3000,
+                    lineWidth: 0,
+                    name: 'measured',
+                    data: data3,
+                    color: '#0b62a4',
+                    showInNavigator: true,
+                    allowPointSelect: true,
+                    marker: {
+                        symbol: "circle",
+                        radius: 4,
+                        enable: false,
+                        states: {
+                            select: {
+                                radius: 9,
+                                fillColor: this.color,
+                                lineColor: 'black',
+                                lineWidth: 3
+                            }
+                        },
+                    },
+                    tooltip: {
+                        headerFormat: '',
+                        pointFormatter: function () {
+                            return '<span style="font-size: 10px">' + Highcharts.dateFormat("%A, %b, %e, %Y", this.x)
+                                + '</span><br/>' + this.series.name + ': <b>' + this.y.toFixed(2) + '</b>';
+                        }
+                    }
+                }
+            ]
+
+        });
+
+    })
+
+</script>
